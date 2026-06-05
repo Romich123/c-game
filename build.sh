@@ -1,0 +1,1 @@
+gcc main.c -I./include -I./ -I./ui -L./lib -lraylib -o main -lgdi32 -lwinmm -lws2_32
