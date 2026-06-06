@@ -30,10 +30,9 @@ static bool SetNonBlocking(socket_t sock, bool nonblocking) {
 #endif
 }
 
+// this assumes remaining buffer is already read and inserted into buffer
+// it will allocate new remaining buffer
 static SocketMessage *TryParseMessage(char *buffer, uint64_t n, char **remainingBuffer, uint64_t *remainingSize) {
-    *remainingBuffer = NULL;
-    *remainingSize = 0;
-
     if (n < NETWORK_SOCKET_MESSAGE_HEADER)
         return NULL;
 
@@ -45,13 +44,16 @@ static SocketMessage *TryParseMessage(char *buffer, uint64_t n, char **remaining
     header.size = ntohll(header.size);
     header.messageType = ntohmt(header.messageType);
 
+    if (header.size > UINT64_MAX - NETWORK_SOCKET_MESSAGE_HEADER) {
+        return NULL;
+    }
+
     uint64_t fullMessageSize = NETWORK_SOCKET_MESSAGE_HEADER + header.size;
 
     if (n < fullMessageSize)
         return NULL;
 
-    SocketMessage *msg =
-        malloc(sizeof(SocketMessageHeader) + header.size);
+    SocketMessage *msg = malloc(sizeof(SocketMessageHeader) + header.size);
 
     if (!msg)
         return NULL;
@@ -73,22 +75,6 @@ static SocketMessage *TryParseMessage(char *buffer, uint64_t n, char **remaining
 
     return msg;
 }
-
-// should be optimized away
-// so shouldn't cause any performance change
-// clang-format off
-#define ntohmt(x)                            \
-    (sizeof(messagetype_t) == 1 ? (x)      : \
-     sizeof(messagetype_t) == 2 ? ntohs(x) : \
-     sizeof(messagetype_t) == 4 ? ntohl(x) : \
-                                  ntohll(x))
-
-#define htonmt(x)                            \
-    (sizeof(messagetype_t) == 1 ? (x)      : \
-     sizeof(messagetype_t) == 2 ? htons(x) : \
-     sizeof(messagetype_t) == 4 ? htonl(x) : \
-                                  htonll(x))
-// clang-format on
 
 ServerInstance *Server_Create(uint16_t startPort, iclient_t maxClients) {
     socket_t server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -332,7 +318,7 @@ SocketMessage *Server_ListenToClient(ServerInstance *server, iclient_t clientInd
     header.size = ntohll(header.size);
     header.messageType = ntohmt(header.messageType);
 
-    if (header.size > SIZE_MAX - NETWORK_SOCKET_MESSAGE_HEADER) {
+    if (header.size > UINT64_MAX - NETWORK_SOCKET_MESSAGE_HEADER) {
         Server_DisconnectClient(server, clientIndex);
         return NULL;
     }
@@ -661,12 +647,11 @@ SocketMessage *Client_Listen(ClientInstance *client) {
     header.size = ntohll(header.size);
     header.messageType = ntohmt(header.messageType);
 
-    if (header.size > SIZE_MAX - NETWORK_SOCKET_MESSAGE_HEADER) {
+    if (header.size > UINT64_MAX - NETWORK_SOCKET_MESSAGE_HEADER) {
         return NULL;
     }
 
-    uint64_t fullMessageSize =
-        header.size + NETWORK_SOCKET_MESSAGE_HEADER;
+    uint64_t fullMessageSize = header.size + NETWORK_SOCKET_MESSAGE_HEADER;
 
     if (fullMessageSize > sizeof(buffer)) {
         client->skipNextReceiveSize = fullMessageSize - (sizeof(buffer) - offset);

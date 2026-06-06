@@ -1,1 +1,1 @@
-gcc main.c -I./include -I./ -I./ui -L./lib -lraylib -o main -lgdi32 -lwinmm -lws2_32
+gcc main.c -I./include -L./lib ./lib/networking.c -lraylib -o main -lgdi32 -lwinmm -lws2_32
